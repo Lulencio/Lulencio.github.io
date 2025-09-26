@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Galería — Mis dibujos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#030a06;--panel:#07120a;--accent:#2bff88;--text:#b7ffd7}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Share Tech Mono",ui-monospace,monospace;background:radial-gradient(1200px 600px at 20% -10%,#062313 0%,#030a06 60%,#000 100%);color:var(--text);min-height:100vh}
+  header{padding:22px;text-align:center;border-bottom:1px solid #1a3f2a}
+  h1{margin:0 0 6px;color:var(--accent);letter-spacing:.5px}
+  .controls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+  .btn{background:#06150d;border:1px solid #184b2f;color:var(--text);padding:8px 12px;border-radius:8px;cursor:pointer}
+  main{max-width:1100px;margin:0 auto;padding:18px}
+  #drop{height:320px;border:2px dashed #1f6a43;border-radius:10px;display:flex;align-items:center;justify-content:center;margin:14px 0;background:linear-gradient(180deg,rgba(43,255,136,.04),rgba(0,0,0,.08));text-align:center}
+  #drop.dragover{box-shadow:0 0 40px rgba(43,255,136,.15) inset}
+  #gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(0,0,0,.12));border:1px solid #103822;border-radius:10px;overflow:hidden}
+  .frame{position:relative}
+  .frame::after{content:"";position:absolute;inset:0;border:1px solid rgba(43,255,136,.15);pointer-events:none}
+  img{width:100%;height:180px;object-fit:cover;display:block;filter:contrast(1.02) saturate(1.05) hue-rotate(0deg)}
+  .meta{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;font-size:12px;color:#9fffcf}
+  footer{padding:26px 12px;text-align:center;color:#85e8be80;border-top:1px solid #1a3f2a}
+  input[type=file]{display:none}
+  /* “scanlines” estilo CRT */
+  .crt{position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg, rgba(43,255,136,.06), rgba(43,255,136,.06) 1px, transparent 1px, transparent 3px)}
+</style>
+</head>
+<body>
+<div class="crt"></div>
+<header>
+  <h1>Galería — Mis dibujos</h1>
+  <p style="margin:6px 0 12px;opacity:.8">Sube, arrastra o muestra tus imágenes. Estética verde tipo “hacker”.</p>
+  <div class="controls">
+    <label class="btn" for="fileinp">Subir imágenes</label>
+    <input id="fileinp" type="file" accept="image/*" multiple>
+    <button id="clear" class="btn">Limpiar vista (arrastradas)</button>
+  </div>
+</header>
+
+<main>
+  <section id="drop"><p>Arrastra aquí para previsualizar sin subir — o usa “Subir imágenes”.</p></section>
+  <h3 style="margin:10px 2px 12px;color:#8dffbf">Galería publicada (desde carpeta <code>/img</code>)</h3>
+  <section id="gallery"></section>
+</main>
+
+<footer>
+  Hecha con ❤️ y GitHub Pages. Edita el arreglo <code>IMAGES</code> en el HTML para agregar/ordenar tus imágenes.
+</footer>
+
+<script>
+/** 1) Lista de imágenes que ya subiste a /img/ en el repo **/
+const IMAGES = [
+  // Ejemplo: cambia por tus archivos
+  // "dibujo1.png", "dibujo2.jpg", "hello-kitty-wireframe.webp"
+];
+
+/** Render estático (desde /img/) **/
+const gallery = document.getElementById('gallery');
+function renderStatic(){
+  gallery.innerHTML = '';
+  IMAGES.forEach(name=>{
+    const card = document.createElement('div'); card.className='card';
+    const frame = document.createElement('div'); frame.className='frame';
+    const img = document.createElement('img'); img.loading='lazy'; img.alt=name; img.src = 'img/'+name;
+    const meta = document.createElement('div'); meta.className='meta';
+    const n = document.createElement('div'); n.textContent = name;
+    const t = document.createElement('div'); t.textContent = 'publicado';
+    frame.appendChild(img); card.appendChild(frame); meta.append(n,t); card.appendChild(meta); gallery.appendChild(card);
+  });
+}
+renderStatic();
+
+/** 2) Drag & Drop / input (solo vista local; no guarda en el repo) **/
+const drop = document.getElementById('drop');
+const fileinp = document.getElementById('fileinp');
+const clearBtn = document.getElementById('clear');
+
+function addCardsFromFiles(files){
+  const frag = document.createDocumentFragment();
+  [...files].forEach(f=>{
+    if(!f.type.startsWith('image/')) return;
+    const url = URL.createObjectURL(f);
+    const card = document.createElement('div'); card.className='card';
+    const frame = document.createElement('div'); frame.className='frame';
+    const img = document.createElement('img'); img.src=url; img.onload=()=>URL.revokeObjectURL(url);
+    const meta = document.createElement('div'); meta.className='meta';
+    const n = document.createElement('div'); n.textContent = f.name;
+    const t = document.createElement('div'); t.textContent = (f.size/1024|0)+' KB';
+    frame.appendChild(img); card.appendChild(frame); meta.append(n,t); card.appendChild(meta); frag.appendChild(card);
+  });
+  gallery.prepend(frag);
+}
+
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('dragover')}))
+;['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('dragover')}))
+drop.addEventListener('drop',e=>{const dt=e.dataTransfer;if(dt?.files) addCardsFromFiles(dt.files)});
+fileinp.addEventListener('change',e=> addCardsFromFiles(e.target.files));
+clearBtn.addEventListener('click',()=>location.reload()); // limpio y recargo estáticos
+</script>
+</body>
+</html>
