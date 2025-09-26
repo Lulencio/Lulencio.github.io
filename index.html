@@ -3,104 +3,178 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Galería — Mis dibujos</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<title>Wireframe Sphere</title>
 <style>
-  :root{--bg:#030a06;--panel:#07120a;--accent:#2bff88;--text:#b7ffd7}
-  *{box-sizing:border-box}
-  body{margin:0;font-family:"Share Tech Mono",ui-monospace,monospace;background:radial-gradient(1200px 600px at 20% -10%,#062313 0%,#030a06 60%,#000 100%);color:var(--text);min-height:100vh}
-  header{padding:22px;text-align:center;border-bottom:1px solid #1a3f2a}
-  h1{margin:0 0 6px;color:var(--accent);letter-spacing:.5px}
-  .controls{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-  .btn{background:#06150d;border:1px solid #184b2f;color:var(--text);padding:8px 12px;border-radius:8px;cursor:pointer}
-  main{max-width:1100px;margin:0 auto;padding:18px}
-  #drop{height:320px;border:2px dashed #1f6a43;border-radius:10px;display:flex;align-items:center;justify-content:center;margin:14px 0;background:linear-gradient(180deg,rgba(43,255,136,.04),rgba(0,0,0,.08));text-align:center}
-  #drop.dragover{box-shadow:0 0 40px rgba(43,255,136,.15) inset}
-  #gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
-  .card{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(0,0,0,.12));border:1px solid #103822;border-radius:10px;overflow:hidden}
-  .frame{position:relative}
-  .frame::after{content:"";position:absolute;inset:0;border:1px solid rgba(43,255,136,.15);pointer-events:none}
-  img{width:100%;height:180px;object-fit:cover;display:block;filter:contrast(1.02) saturate(1.05) hue-rotate(0deg)}
-  .meta{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;font-size:12px;color:#9fffcf}
-  footer{padding:26px 12px;text-align:center;color:#85e8be80;border-top:1px solid #1a3f2a}
-  input[type=file]{display:none}
-  /* “scanlines” estilo CRT */
-  .crt{position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg, rgba(43,255,136,.06), rgba(43,255,136,.06) 1px, transparent 1px, transparent 3px)}
+  /* ====== TEMA ====== */
+  :root{
+    --bg-1:#000;          /* fondo base */
+    --bg-2:#06140c;       /* tono verdoso */
+    --accent:#2bff88;     /* verde neón para líneas */
+  }
+
+  /* ====== LAYOUT ====== */
+  html,body{height:100%}
+  body{
+    margin:0;
+    background: radial-gradient(1200px 600px at 20% -10%, var(--bg-2) 0%, #021007 60%, var(--bg-1) 100%);
+    overflow:hidden;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  /* Líneas/scanlines tipo CRT */
+  .crt{
+    position:fixed; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(0deg, rgba(43,255,136,.06), rgba(43,255,136,.06) 1px, transparent 1px, transparent 3px);
+    mix-blend-mode: screen;
+  }
+
+  /* Grid muy sutil en el fondo */
+  .grid{
+    position:fixed; inset:0; pointer-events:none; opacity:.07;
+    background:
+      linear-gradient(90deg, #2bff88 1px, transparent 1px) 0 0/40px 40px,
+      linear-gradient(#2bff88 1px, transparent 1px) 0 0/40px 40px;
+    filter: blur(.3px);
+  }
+
+  /* Canvas de la esfera */
+  #sphere{
+    position:fixed; inset:0; width:100%; height:100%; display:block;
+  }
 </style>
 </head>
 <body>
-<div class="crt"></div>
-<header>
-  <h1>Galería — Mis dibujos</h1>
-  <p style="margin:6px 0 12px;opacity:.8">Sube, arrastra o muestra tus imágenes. Estética verde tipo “hacker”.</p>
-  <div class="controls">
-    <label class="btn" for="fileinp">Subir imágenes</label>
-    <input id="fileinp" type="file" accept="image/*" multiple>
-    <button id="clear" class="btn">Limpiar vista (arrastradas)</button>
-  </div>
-</header>
-
-<main>
-  <section id="drop"><p>Arrastra aquí para previsualizar sin subir — o usa “Subir imágenes”.</p></section>
-  <h3 style="margin:10px 2px 12px;color:#8dffbf">Galería publicada (desde carpeta <code>/img</code>)</h3>
-  <section id="gallery"></section>
-</main>
-
-<footer>
-  Hecha con ❤️ y GitHub Pages. Edita el arreglo <code>IMAGES</code> en el HTML para agregar/ordenar tus imágenes.
-</footer>
+  <canvas id="sphere"></canvas>
+  <div class="grid"></div>
+  <div class="crt"></div>
 
 <script>
-/** 1) Lista de imágenes que ya subiste a /img/ en el repo **/
-const IMAGES = [
-  // Ejemplo: cambia por tus archivos
-  // "dibujo1.png", "dibujo2.jpg", "hello-kitty-wireframe.webp"
-];
+/* ============================================================
+   Esfera wireframe en Canvas 2D — sin librerías
+   Autor: tú :)  |  Ajusta parámetros en CONFIG
+   ============================================================ */
 
-/** Render estático (desde /img/) **/
-const gallery = document.getElementById('gallery');
-function renderStatic(){
-  gallery.innerHTML = '';
-  IMAGES.forEach(name=>{
-    const card = document.createElement('div'); card.className='card';
-    const frame = document.createElement('div'); frame.className='frame';
-    const img = document.createElement('img'); img.loading='lazy'; img.alt=name; img.src = 'img/'+name;
-    const meta = document.createElement('div'); meta.className='meta';
-    const n = document.createElement('div'); n.textContent = name;
-    const t = document.createElement('div'); t.textContent = 'publicado';
-    frame.appendChild(img); card.appendChild(frame); meta.append(n,t); card.appendChild(meta); gallery.appendChild(card);
-  });
-}
-renderStatic();
+(() => {
+  const canvas = document.getElementById('sphere');
+  const ctx = canvas.getContext('2d');
 
-/** 2) Drag & Drop / input (solo vista local; no guarda en el repo) **/
-const drop = document.getElementById('drop');
-const fileinp = document.getElementById('fileinp');
-const clearBtn = document.getElementById('clear');
+  /* --------- CONFIG --------- */
+  const CONFIG = {
+    latSteps: 16,        // líneas horizontales (paralelos)
+    lonSteps: 24,        // líneas verticales (meridianos)
+    lineWidth: 2,        // grosor de línea
+    glow: 12,            // brillo (sombra)
+    color: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+    spinX: 0.005,        // velocidad de giro en X
+    spinY: 0.01,         // velocidad de giro en Y
+    fov: 700,            // “distancia focal” para la perspectiva
+    radiusRatio: 0.36,   // tamaño de la esfera relativo al lado corto
+  };
 
-function addCardsFromFiles(files){
-  const frag = document.createDocumentFragment();
-  [...files].forEach(f=>{
-    if(!f.type.startsWith('image/')) return;
-    const url = URL.createObjectURL(f);
-    const card = document.createElement('div'); card.className='card';
-    const frame = document.createElement('div'); frame.className='frame';
-    const img = document.createElement('img'); img.src=url; img.onload=()=>URL.revokeObjectURL(url);
-    const meta = document.createElement('div'); meta.className='meta';
-    const n = document.createElement('div'); n.textContent = f.name;
-    const t = document.createElement('div'); t.textContent = (f.size/1024|0)+' KB';
-    frame.appendChild(img); card.appendChild(frame); meta.append(n,t); card.appendChild(meta); frag.appendChild(card);
-  });
-  gallery.prepend(frag);
-}
+  /* --------- SIZE / DPR --------- */
+  const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  function resize(){
+    const { innerWidth:w, innerHeight:h } = window;
+    canvas.width  = Math.floor(w * DPR);
+    canvas.height = Math.floor(h * DPR);
+    canvas.style.width  = w + 'px';
+    canvas.style.height = h + 'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0); // todas las medidas en CSS px
+    radius = Math.min(w, h) * CONFIG.radiusRatio;
+    cx = w/2; cy = h/2;
+  }
+  let cx=0, cy=0, radius=0;
+  window.addEventListener('resize', resize, {passive:true});
+  resize();
 
-['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('dragover')}))
-;['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('dragover')}))
-drop.addEventListener('drop',e=>{const dt=e.dataTransfer;if(dt?.files) addCardsFromFiles(dt.files)});
-fileinp.addEventListener('change',e=> addCardsFromFiles(e.target.files));
-clearBtn.addEventListener('click',()=>location.reload()); // limpio y recargo estáticos
+  /* --------- GEOMETRÍA DE LA ESFERA --------- */
+  // Precomputamos una malla de puntos 3D en reposo (latitudes x longitudes)
+  const base = [];
+  for (let i=0; i<=CONFIG.latSteps; i++){
+    const v = i/CONFIG.latSteps;
+    const phi = (v * Math.PI) - Math.PI/2; // [-pi/2, pi/2]
+    const ring = [];
+    for (let j=0; j<=CONFIG.lonSteps; j++){
+      const u = j/CONFIG.lonSteps;
+      const theta = u * Math.PI*2;        // [0, 2pi]
+      // Puntos unitarios
+      const x = Math.cos(phi) * Math.cos(theta);
+      const y = Math.sin(phi);
+      const z = Math.cos(phi) * Math.sin(theta);
+      ring.push({x,y,z});
+    }
+    base.push(ring);
+  }
+
+  /* --------- ROTACIONES 3D --------- */
+  function rotY(p, a){
+    const s = Math.sin(a), c = Math.cos(a);
+    return { x: c*p.x + s*p.z, y: p.y, z: -s*p.x + c*p.z };
+  }
+  function rotX(p, a){
+    const s = Math.sin(a), c = Math.cos(a);
+    return { x: p.x, y: c*p.y - s*p.z, z: s*p.y + c*p.z };
+  }
+
+  /* --------- PROYECCIÓN PERSPECTIVA --------- */
+  const camZ = 3; // cámara “frente” a la esfera (en radios)
+  function project(p){ // p en radios de 1
+    // Escalamos por radius
+    const x = p.x * radius, y = p.y * radius, z = p.z * radius;
+    const zCam = (camZ*radius) - z;
+    const s = CONFIG.fov / zCam;
+    return { x: cx + x*s, y: cy + y*s };
+  }
+
+  /* --------- DIBUJAR LÍNEAS --------- */
+  function drawPolyline(points){
+    if(points.length < 2) return;
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for(let i=1;i<points.length;i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.stroke();
+  }
+
+  /* --------- LOOP --------- */
+  let rx = 0, ry = 0;
+  function frame(){
+    // Fondo “ghost” para estela muy tenue
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.fillRect(0,0,canvas.width/DPR,canvas.height/DPR);
+
+    ctx.lineWidth = CONFIG.lineWidth;
+    ctx.strokeStyle = CONFIG.color;
+    ctx.shadowColor = CONFIG.color;
+    ctx.shadowBlur = CONFIG.glow;
+
+    // Rotamos ángulos
+    rx += CONFIG.spinX;
+    ry += CONFIG.spinY;
+
+    // 1) Paralelos (latitudes)
+    for (let i=0; i<base.length; i++){
+      const ring = base[i];
+      const pts = ring.map(p => project(rotY(rotX(p, rx), ry)));
+      drawPolyline(pts);
+    }
+
+    // 2) Meridianos (longitudes) – conectar por índice a lo largo de latitudes
+    for (let j=0; j<base[0].length; j++){
+      const col = [];
+      for (let i=0; i<base.length; i++){
+        const p = base[i][j];
+        col.push(project(rotY(rotX(p, rx), ry)));
+      }
+      drawPolyline(col);
+    }
+
+    // Limpieza de sombra (para que no afecte a futuro dibujo UI si lo agregas)
+    ctx.shadowBlur = 0;
+
+    requestAnimationFrame(frame);
+  }
+  frame();
+})();
 </script>
 </body>
 </html>
