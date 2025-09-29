@@ -1,180 +1,678 @@
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Wireframe Sphere</title>
-<style>
-  /* ====== TEMA ====== */
-  :root{
-    --bg-1:#000;          /* fondo base */
-    --bg-2:#06140c;       /* tono verdoso */
-    --accent:#2bff88;     /* verde neón para líneas */
-  }
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Página Pirata</title>
 
-  /* ====== LAYOUT ====== */
-  html,body{height:100%}
-  body{
-    margin:0;
-    background: radial-gradient(1200px 600px at 20% -10%, var(--bg-2) 0%, #021007 60%, var(--bg-1) 100%);
-    overflow:hidden;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  }
+  <style>
+    /* ──────────────────────────────────────────────────────────────────────────
+       TEMA (Colores base y derivados)
+       Cambia --accent para modificar el “neón” principal (morado/azul).
+       ────────────────────────────────────────────────────────────────────────── */
+    :root{
+      /* Fondo (azul profundo) */
+      --bg-1:#00010a;
+      --bg-2:#0b1030;
 
-  /* Líneas/scanlines tipo CRT */
-  .crt{
-    position:fixed; inset:0; pointer-events:none;
-    background:repeating-linear-gradient(0deg, rgba(43,255,136,.06), rgba(43,255,136,.06) 1px, transparent 1px, transparent 3px);
-    mix-blend-mode: screen;
-  }
+      /* Acento (neón morado). Sugerencias: #8b5cf6, #a78bfa, #9b8cff */
+      --accent:#9b8cff;
 
-  /* Grid muy sutil en el fondo */
-  .grid{
-    position:fixed; inset:0; pointer-events:none; opacity:.07;
-    background:
-      linear-gradient(90deg, #2bff88 1px, transparent 1px) 0 0/40px 40px,
-      linear-gradient(#2bff88 1px, transparent 1px) 0 0/40px 40px;
-    filter: blur(.3px);
-  }
+      /* Derivados */
+      --grid: rgba(155,140,255,.55);  /* líneas de la cuadrícula */
+      --scan: rgba(155,140,255,.06);  /* scanlines CRT */
+      --hud-bg: rgba(8,12,28,.55);    /* paneles semi-transp. */
+      --hud-bd: rgba(155,140,255,.35);
+      --hud-tx: #dcd5ff;              /* texto UI */
+    }
 
-  /* Canvas de la esfera */
-  #sphere{
-    position:fixed; inset:0; width:100%; height:100%; display:block;
-  }
-</style>
+    /* ──────────────────────────────────────────────────────────────────────────
+       LAYOUT / FONDO
+       ────────────────────────────────────────────────────────────────────────── */
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      background: radial-gradient(1200px 600px at 20% -10%, var(--bg-2) 0%, #050a22 60%, var(--bg-1) 100%);
+      overflow:hidden; /* evita scroll accidental */
+    }
+
+    /* Cuadrícula sutil (queda por debajo de todo) */
+    .grid{
+      position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.08;
+      background:
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/40px 40px,
+        linear-gradient(var(--grid) 1px, transparent 1px) 0 0/40px 40px;
+      filter: blur(.3px);
+    }
+
+    /* Scanlines estilo CRT (sin “teñir” todo) */
+    .crt{
+      position:fixed; inset:0; pointer-events:none; z-index:6;
+      background:repeating-linear-gradient(
+        0deg,
+        var(--scan), var(--scan) 1px,
+        transparent 1px, transparent 3px
+      );
+      opacity:.12;
+    }
+
+    /* Capas de los canvas (orden importante) */
+    #matrix{ position:fixed; inset:0; z-index:1; background:transparent; display:block; } /* lluvia */
+    #sphere{ position:fixed; inset:0; z-index:2; background:transparent; display:block; } /* esfera */
+    #draw  { position:fixed; inset:0; z-index:3; background:transparent; display:block; cursor:crosshair; } /* dibujo */
+
+    /* ──────────────────────────────────────────────────────────────────────────
+       HUD (título/subtítulo) y Bloc de notas editable
+       ────────────────────────────────────────────────────────────────────────── */
+    .hud{
+      position:fixed; top:22px; left:22px; z-index:4; max-width:540px;
+      background:var(--hud-bg);
+      border:1px solid var(--hud-bd);
+      color:var(--hud-tx);
+      border-radius:10px; padding:12px 14px;
+      box-shadow:0 0 24px color-mix(in oklab, var(--accent) 24%, transparent),
+                 inset 0 0 12px color-mix(in oklab, var(--accent) 12%, transparent);
+      backdrop-filter:blur(2px);
+    }
+    .hud h2{ margin:0 0 6px; color:var(--accent); letter-spacing:.5px; }
+    .hud p{ margin:0; opacity:.9 }
+    .typing::after{ content:"▌"; margin-left:4px; animation:blink 1s step-start infinite; }
+    @keyframes blink{ 50%{ opacity:0 } }
+
+    .note{
+      position:fixed; left:24px; bottom:24px; z-index:4;
+      width:460px; min-height:150px; outline:none;
+      background:var(--hud-bg);
+      border:1px solid var(--hud-bd);
+      color:var(--hud-tx);
+      border-radius:10px; padding:10px 12px; font-size:14px; line-height:1.5;
+      box-shadow:0 0 20px color-mix(in oklab, var(--accent) 18%, transparent),
+                 inset 0 0 10px color-mix(in oklab, var(--accent) 10%, transparent);
+      caret-color:var(--accent);
+    }
+    .note:empty:before{ content:attr(data-placeholder); color:color-mix(in oklab, var(--hud-tx) 60%, transparent); }
+
+    /* ──────────────────────────────────────────────────────────────────────────
+       Toolbar del módulo de dibujo (abajo/derecha)
+       ────────────────────────────────────────────────────────────────────────── */
+    .toolbar{
+      position:fixed;
+      right: calc(18px + env(safe-area-inset-right));
+      bottom: calc(18px + env(safe-area-inset-bottom));
+      z-index:5;
+      display:flex; gap:8px; align-items:center; padding:8px 10px;
+      background:var(--hud-bg);
+      border:1px solid var(--hud-bd);
+      color:var(--hud-tx);
+      border-radius:10px;
+      box-shadow:0 0 18px color-mix(in oklab, var(--accent) 22%, transparent),
+                 inset 0 0 10px color-mix(in oklab, var(--accent) 10%, transparent);
+      font-size:13px;
+    }
+    .toolbar .btn, .toolbar input[type="range"]{
+      background:#0f1436; border:1px solid color-mix(in oklab, var(--accent) 30%, #0f1436);
+      color:var(--hud-tx); border-radius:8px; padding:6px 10px; outline:none;
+    }
+    .toolbar .btn{ cursor:pointer }
+    .toolbar label{opacity:.8}
+
+/* Ojo retro que sigue el mouse */
+#eye{
+  position:fixed; inset:0;
+  z-index:3;                  /* encima de la esfera (#sphere z:2) */
+  background:transparent;
+  image-rendering: pixelated; /* look retro */
+}
+
+/* Asegúrate de que #draw quede encima del ojo */
+#draw{ z-index:4; }
+
+  </style>
 </head>
+
 <body>
-  <canvas id="sphere"></canvas>
+  <!-- Fondo base -->
   <div class="grid"></div>
+
+  <!-- Canvas 1: lluvia de símbolos (fondo) -->
+  <canvas id="matrix"></canvas>
+
+  <!-- Canvas 2: esfera wireframe (encima de la lluvia) -->
+  <canvas id="sphere"></canvas>
+
+  <!-- Canvas 3: ojo-->
+  <canvas id="eye"></canvas>
+
+  <!-- Canvas 4: capa de dibujo manual (encima de la esfera) -->
+  <canvas id="draw"></canvas>
+
+  <!-- HUD editable (título/subtítulo) -->
+  <section class="hud">
+    <h2 id="headline" class="typing" contenteditable="true">Página Pirata</h2>
+    <p  id="subline"  contenteditable="true">Tripulación del pirata Lukenciou</p>
+  </section>
+
+  <!-- Bloc de notas persistente -->
+  <div id="note" class="note" contenteditable="true" spellcheck="false"
+       data-placeholder="Escribe aquí tus notas (Shift+Enter = salto de línea)"></div>
+
+  <!-- Toolbar del módulo de dibujo -->
+  <div class="toolbar">
+    <label>Size</label>
+    <input id="size" type="range" min="1" max="40" value="6" />
+    <button class="btn" id="brush">Brush</button>
+    <button class="btn" id="eraser">Eraser</button>
+    <button class="btn" id="clear">Clear</button>
+    <button class="btn" id="save">Save PNG</button>
+  </div>
+
+  <!-- Scanlines CRT (sobre UI) -->
   <div class="crt"></div>
 
-<script>
-/* ============================================================
-   Esfera wireframe en Canvas 2D — sin librerías
-   Autor: tú :)  |  Ajusta parámetros en CONFIG
-   ============================================================ */
+  <!-- ────────────────────────────────────────────────────────────────────────
+       ESFERA WIREFRAME (Canvas 2D, sin librerías)
+       - Limpia con clearRect (no tinta de negro → no tapa la lluvia)
+       - Posición/tamaño ajustables en CONFIG
+       ──────────────────────────────────────────────────────────────────────── -->
+  <script>
+  (() => {
+    const canvas = document.getElementById('sphere');
+    const ctx     = canvas.getContext('2d');
 
+    /* Parámetros de la esfera */
+    const CONFIG = {
+      latSteps: 16,           // paralelos (líneas horizontales)
+      lonSteps: 24,           // meridianos (líneas verticales)
+      lineWidth: 0.35,        // grosor de línea
+      glow: 10,               // brillo de línea
+      color: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+      spinX: 0.004,           // velocidad de giro X
+      spinY: 0.001,           // velocidad de giro Y
+      fov: 450,               // distancia focal (perspectiva)
+      radiusRatio: 0.25,      // tamaño relativo al lado corto de la ventana
+      centerX: 0.88,          // 0..1 → 0.5 centro; 0.88 hacia la derecha
+      centerY: 0.25           // 0..1 → 0.5 centro; 0.25 arriba
+    };
+
+    /* Preparación de tamaño y DPR */
+    const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    let cx=0, cy=0, radius=0;
+    function resize(){
+      const w = window.innerWidth, h = window.innerHeight;
+      canvas.width  = Math.floor(w * DPR);
+      canvas.height = Math.floor(h * DPR);
+      canvas.style.width  = w + 'px';
+      canvas.style.height = h + 'px';
+      ctx.setTransform(DPR,0,0,DPR,0,0);
+
+      radius = Math.min(w, h) * CONFIG.radiusRatio;
+      cx = w * (CONFIG.centerX ?? 0.5);
+      cy = h * (CONFIG.centerY ?? 0.5);
+    }
+    window.addEventListener('resize', resize, {passive:true});
+    resize();
+
+    /* Malla base en coordenadas de una esfera unitaria */
+    const base = [];
+    for (let i=0; i<=CONFIG.latSteps; i++){
+      const v   = i/CONFIG.latSteps;
+      const phi = v*Math.PI - Math.PI/2; // [-π/2, π/2]
+      const ring = [];
+      for (let j=0; j<=CONFIG.lonSteps; j++){
+        const u = j/CONFIG.lonSteps;
+        const th = u * Math.PI*2;        // [0, 2π]
+        // Coordenadas 3D (radio 1)
+        const x = Math.cos(phi) * Math.cos(th);
+        const y = Math.sin(phi);
+        const z = Math.cos(phi) * Math.sin(th);
+        ring.push({x,y,z});
+      }
+      base.push(ring);
+    }
+
+    /* Rotaciones 3D y proyección en 2D */
+    const rotY = (p,a)=>{ const s=Math.sin(a),c=Math.cos(a); return {x:c*p.x+s*p.z,y:p.y,z:-s*p.x+c*p.z}; };
+    const rotX = (p,a)=>{ const s=Math.sin(a),c=Math.cos(a); return {x:p.x,y:c*p.y-s*p.z,z:s*p.y+c*p.z}; };
+    const camZ = 3; // cámara a 3 radios
+    function project(p){
+      const x=p.x*radius, y=p.y*radius, z=p.z*radius;
+      const zCam = (camZ*radius) - z;
+      const s = CONFIG.fov / zCam;
+      return { x: cx + x*s, y: cy + y*s };
+    }
+
+    /* Dibujo de polilínea */
+    function drawPolyline(pts){
+      if(pts.length<2) return;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+    }
+
+    /* Bucle de animación */
+    let rx=0, ry=0;
+    function frame(){
+      // Limpieza transparente: no cubre la lluvia de fondo
+      ctx.clearRect(0,0,canvas.width/DPR,canvas.height/DPR);
+
+      // Estilo de línea brillante
+      ctx.lineWidth   = CONFIG.lineWidth;
+      ctx.strokeStyle = CONFIG.color;
+      ctx.shadowColor = CONFIG.color;
+      ctx.shadowBlur  = CONFIG.glow;
+
+      // Rotación continua
+      rx += CONFIG.spinX;
+      ry += CONFIG.spinY;
+
+      // Paralelos
+      for (const ring of base){
+        const pts = ring.map(p => project( rotY( rotX(p,rx), ry) ));
+        drawPolyline(pts);
+      }
+      // Meridianos
+      for (let j=0; j<base[0].length; j++){
+        const col = [];
+        for (let i=0; i<base.length; i++){
+          const p = base[i][j];
+          col.push( project( rotY( rotX(p,rx), ry) ) );
+        }
+        drawPolyline(col);
+      }
+
+      // Quita brillo para no afectar otras capas
+      ctx.shadowBlur = 0;
+
+      requestAnimationFrame(frame);
+    }
+    frame();
+  })();
+  </script>
+
+  <script>
+/* ============================================================================
+   OJO RETRO “HALFTONE” QUE SIGUE EL MOUSE (Canvas 2D, sin librerías)
+   - Usa el color --accent del tema.
+   - El iris/pupila siguen el cursor con límite para no salirse del globo.
+   - Sombreado por dithering (matriz de Bayer) para look viejito.
+   ============================================================================ */
 (() => {
-  const canvas = document.getElementById('sphere');
-  const ctx = canvas.getContext('2d');
+  const cvs = document.getElementById('eye');
+  const ctx = cvs.getContext('2d');
+  const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  const ACCENT = getComputedStyle(document.documentElement)
+    .getPropertyValue('--accent').trim() || '#9b8cff';
 
-  /* --------- CONFIG --------- */
-  const CONFIG = {
-    latSteps: 16,        // líneas horizontales (paralelos)
-    lonSteps: 24,        // líneas verticales (meridianos)
-    lineWidth: 2,        // grosor de línea
-    glow: 12,            // brillo (sombra)
-    color: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
-    spinX: 0.005,        // velocidad de giro en X
-    spinY: 0.01,         // velocidad de giro en Y
-    fov: 700,            // “distancia focal” para la perspectiva
-    radiusRatio: 0.36,   // tamaño de la esfera relativo al lado corto
+  // -------- Config rápida del ojo --------
+  const CFG = {
+    // posición del ojo en pantalla (relativo 0..1)
+    cx: 0.78,   // más a la derecha
+    cy: 0.22,   // algo arriba
+    // tamaños relativos a lado corto de la ventana
+    eyeR:   0.15,   // radio "base" del ojo (escala general)
+    aspect: 0.62,   // achatado vertical (0.5..0.8 da bien)
+    iris:   0.44,   // radio relativo del iris respecto al ojo
+    pupil:  0.20,   // radio relativo de la pupila respecto al ojo
+    maxLook:0.28,   // cuánto puede “moverse” la pupila dentro del ojo
+    cell:   6,      // tamaño celda halftone (px)
+    glow:  10,      // brillo del trazo
+    line:  1.2      // grosor del contorno
   };
 
-  /* --------- SIZE / DPR --------- */
-  const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  let W=0, H=0, R=0, ex=0, ey=0;
   function resize(){
-    const { innerWidth:w, innerHeight:h } = window;
-    canvas.width  = Math.floor(w * DPR);
-    canvas.height = Math.floor(h * DPR);
-    canvas.style.width  = w + 'px';
-    canvas.style.height = h + 'px';
-    ctx.setTransform(DPR,0,0,DPR,0,0); // todas las medidas en CSS px
-    radius = Math.min(w, h) * CONFIG.radiusRatio;
-    cx = w/2; cy = h/2;
+    W = window.innerWidth; H = window.innerHeight;
+    cvs.width  = Math.floor(W * DPR);
+    cvs.height = Math.floor(H * DPR);
+    cvs.style.width = W+'px'; cvs.style.height = H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+
+    R  = Math.min(W,H) * CFG.eyeR;
+    ex = W * CFG.cx;
+    ey = H * CFG.cy;
   }
-  let cx=0, cy=0, radius=0;
   window.addEventListener('resize', resize, {passive:true});
   resize();
 
-  /* --------- GEOMETRÍA DE LA ESFERA --------- */
-  // Precomputamos una malla de puntos 3D en reposo (latitudes x longitudes)
-  const base = [];
-  for (let i=0; i<=CONFIG.latSteps; i++){
-    const v = i/CONFIG.latSteps;
-    const phi = (v * Math.PI) - Math.PI/2; // [-pi/2, pi/2]
-    const ring = [];
-    for (let j=0; j<=CONFIG.lonSteps; j++){
-      const u = j/CONFIG.lonSteps;
-      const theta = u * Math.PI*2;        // [0, 2pi]
-      // Puntos unitarios
-      const x = Math.cos(phi) * Math.cos(theta);
-      const y = Math.sin(phi);
-      const z = Math.cos(phi) * Math.sin(theta);
-      ring.push({x,y,z});
-    }
-    base.push(ring);
+  // Target del mouse (si no hay, mira al centro)
+  let mx = ex, my = ey;
+  window.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; }, {passive:true});
+  window.addEventListener('touchmove', e => {
+    if(e.touches && e.touches[0]){ mx = e.touches[0].clientX; my = e.touches[0].clientY; }
+  }, {passive:true});
+
+  // Matriz de Bayer 4x4 para dithering (valores 0..1)
+  const BAYER = [
+    [0,  8,  2, 10],
+    [12, 4, 14,  6],
+    [3, 11,  1,  9],
+    [15, 7, 13,  5]
+  ].map(row => row.map(v => (v+0.5)/16)); // normalizado
+
+  // Test punto dentro de elipse (ojo)
+  function inEye(x,y){
+    const rx = R, ry = R*CFG.aspect;
+    const dx = (x-ex)/rx, dy = (y-ey)/ry;
+    return (dx*dx + dy*dy) <= 1;
   }
 
-  /* --------- ROTACIONES 3D --------- */
-  function rotY(p, a){
-    const s = Math.sin(a), c = Math.cos(a);
-    return { x: c*p.x + s*p.z, y: p.y, z: -s*p.x + c*p.z };
-  }
-  function rotX(p, a){
-    const s = Math.sin(a), c = Math.cos(a);
-    return { x: p.x, y: c*p.y - s*p.z, z: s*p.y + c*p.z };
-  }
+  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
 
-  /* --------- PROYECCIÓN PERSPECTIVA --------- */
-  const camZ = 3; // cámara “frente” a la esfera (en radios)
-  function project(p){ // p en radios de 1
-    // Escalamos por radius
-    const x = p.x * radius, y = p.y * radius, z = p.z * radius;
-    const zCam = (camZ*radius) - z;
-    const s = CONFIG.fov / zCam;
-    return { x: cx + x*s, y: cy + y*s };
-  }
+  function draw(){
+    ctx.clearRect(0,0,W,H);
 
-  /* --------- DIBUJAR LÍNEAS --------- */
-  function drawPolyline(points){
-    if(points.length < 2) return;
+    // 1) Contorno del ojo (elipse)
+    const rx = R, ry = R*CFG.aspect;
+    ctx.save();
+    ctx.lineWidth = CFG.line;
+    ctx.strokeStyle = ACCENT;
+    ctx.shadowColor = ACCENT;
+    ctx.shadowBlur  = CFG.glow;
     ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for(let i=1;i<points.length;i++) ctx.lineTo(points[i].x, points[i].y);
+    ctx.ellipse(ex, ey, rx, ry, 0, 0, Math.PI*2);
     ctx.stroke();
-  }
+    ctx.restore();
 
-  /* --------- LOOP --------- */
-  let rx = 0, ry = 0;
-  function frame(){
-    // Fondo “ghost” para estela muy tenue
-    ctx.fillStyle = 'rgba(0,0,0,0.12)';
-    ctx.fillRect(0,0,canvas.width/DPR,canvas.height/DPR);
+    // 2) Calcular centro del iris/pupila mirando hacia el mouse (clamp al límite)
+    const vx = mx - ex, vy = my - ey;
+    const mag = Math.hypot(vx, vy) || 1;
+    const maxOff = R * CFG.maxLook;
+    const ix = ex + (vx/mag) * maxOff;
+    const iy = ey + (vy/mag) * maxOff;
 
-    ctx.lineWidth = CONFIG.lineWidth;
-    ctx.strokeStyle = CONFIG.color;
-    ctx.shadowColor = CONFIG.color;
-    ctx.shadowBlur = CONFIG.glow;
+    // 3) Iris + pupila (círculos)
+    ctx.save();
+    ctx.lineWidth = CFG.line;
+    ctx.strokeStyle = ACCENT;
+    ctx.shadowColor = ACCENT;
+    ctx.shadowBlur  = CFG.glow;
 
-    // Rotamos ángulos
-    rx += CONFIG.spinX;
-    ry += CONFIG.spinY;
+    const rIris  = R * CFG.iris;
+    const rPupil = R * CFG.pupil;
 
-    // 1) Paralelos (latitudes)
-    for (let i=0; i<base.length; i++){
-      const ring = base[i];
-      const pts = ring.map(p => project(rotY(rotX(p, rx), ry)));
-      drawPolyline(pts);
-    }
+    // iris
+    ctx.beginPath();
+    ctx.arc(ix, iy, rIris, 0, Math.PI*2);
+    ctx.stroke();
 
-    // 2) Meridianos (longitudes) – conectar por índice a lo largo de latitudes
-    for (let j=0; j<base[0].length; j++){
-      const col = [];
-      for (let i=0; i<base.length; i++){
-        const p = base[i][j];
-        col.push(project(rotY(rotX(p, rx), ry)));
-      }
-      drawPolyline(col);
-    }
+    // pupila
+    ctx.beginPath();
+    ctx.arc(ix, iy, rPupil, 0, Math.PI*2);
+    ctx.stroke();
 
-    // Limpieza de sombra (para que no afecte a futuro dibujo UI si lo agregas)
+    // highlight (brillo) pixelado
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = ACCENT;
+    const hl = Math.max(2, Math.floor(CFG.cell*0.8));
+    ctx.fillRect(Math.round(ix - rIris*0.35), Math.round(iy - rIris*0.35), hl, hl);
+    ctx.restore();
+
+    // 4) Dithering dentro del ojo (sombreado retro)
+    ctx.save();
+    // Clip a la elipse del ojo
+    ctx.beginPath();
+    ctx.ellipse(ex, ey, rx, ry, 0, 0, Math.PI*2);
+    ctx.clip();
+
+    ctx.fillStyle = ACCENT;
     ctx.shadowBlur = 0;
 
-    requestAnimationFrame(frame);
+    // Bounding box del ojo para no iterar toda la pantalla
+    const x0 = Math.floor((ex - rx) / CFG.cell) * CFG.cell;
+    const y0 = Math.floor((ey - ry) / CFG.cell) * CFG.cell;
+    const x1 = Math.ceil((ex + rx) / CFG.cell) * CFG.cell;
+    const y1 = Math.ceil((ey + ry) / CFG.cell) * CFG.cell;
+
+    for(let y=y0; y<y1; y+=CFG.cell){
+      for(let x=x0; x<x1; x+=CFG.cell){
+        if(!inEye(x+CFG.cell*0.5, y+CFG.cell*0.5)) continue;
+
+        // “Profundidad” según distancia al centro del iris: más cerca = más oscuro
+        const d = Math.hypot((x+CFG.cell*0.5)-ix, (y+CFG.cell*0.5)-iy);
+        const maxD = R; // normalización simple
+        let coverage = clamp(1 - (d / maxD), 0, 1);
+
+        // Ajuste de contraste para que se note el punteo
+        coverage = Math.pow(coverage, 1.2);
+
+        // Umbral Bayer (4x4) para decidir si pintar el “dot”
+        const bx = (x/CFG.cell) & 3;
+        const by = (y/CFG.cell) & 3;
+        if (coverage > BAYER[by][bx]){
+          // dot pequeño dentro de la celda
+          const s = Math.max(1, Math.floor(CFG.cell*0.45));
+          ctx.fillRect(x + ((CFG.cell-s)>>1), y + ((CFG.cell-s)>>1), s, s);
+        }
+      }
+    }
+    ctx.restore();
+
+    requestAnimationFrame(draw);
   }
-  frame();
+  draw();
 })();
 </script>
+
+  <!-- ────────────────────────────────────────────────────────────────────────
+       MÓDULO DE DIBUJO (Canvas superior)
+       - Brush/Eraser/Size/Clear/Save (PNG)
+       - Funciona con mouse y touch
+       - Conserva el dibujo al redimensionar la ventana
+       ──────────────────────────────────────────────────────────────────────── -->
+  <script>
+  (() => {
+    const cvs = document.getElementById('draw');
+    const ctx = cvs.getContext('2d');
+    const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+    const ACCENT = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#9b8cff';
+
+    let w=0, h=0, drawing=false, erasing=false, last=null, size=6;
+
+    /* Redimensiona el canvas preservando el contenido */
+    function resizePreserving(){
+      const tmp = document.createElement('canvas');
+      tmp.width = cvs.width; tmp.height = cvs.height;
+      tmp.getContext('2d').drawImage(cvs, 0, 0);
+
+      w = window.innerWidth; h = window.innerHeight;
+      cvs.width  = Math.floor(w * DPR);
+      cvs.height = Math.floor(h * DPR);
+      cvs.style.width  = w + 'px';
+      cvs.style.height = h + 'px';
+      ctx.setTransform(DPR,0,0,DPR,0,0);
+
+      ctx.drawImage(tmp, 0, 0, tmp.width, tmp.height, 0, 0, w, h);
+    }
+    window.addEventListener('resize', resizePreserving, {passive:true});
+    resizePreserving();
+
+    /* Traza un segmento (pincel o borrador) */
+    function stroke(from, to){
+      ctx.lineJoin = 'round';
+      ctx.lineCap  = 'round';
+      ctx.lineWidth = size;
+
+      if (erasing){
+        // Borra píxeles existentes
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.strokeStyle = '#000';
+        ctx.shadowBlur = 0;
+      } else {
+        // Dibuja trazo brillante
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = ACCENT;
+        ctx.shadowColor = ACCENT;
+        ctx.shadowBlur = 12;
+      }
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+    }
+
+    /* Utilidades de interacción */
+    const pos = e => { if (e.touches?.[0]) e = e.touches[0]; return {x:e.clientX, y:e.clientY}; };
+    const down= e => { drawing=true; last=pos(e); };
+    const move= e => { if(!drawing) return; const p=pos(e); stroke(last,p); last=p; e.preventDefault(); };
+    const up  = () => { drawing=false; last=null; };
+
+    /* Eventos de puntero/tacto */
+    cvs.addEventListener('mousedown', down);  cvs.addEventListener('mousemove', move);  window.addEventListener('mouseup', up);
+    cvs.addEventListener('touchstart', down, {passive:false});
+    cvs.addEventListener('touchmove',  move, {passive:false});
+    window.addEventListener('touchend', up);
+
+    /* Controles UI */
+    const sizeInp  = document.getElementById('size');
+    const btnBrush = document.getElementById('brush');
+    const btnEraser= document.getElementById('eraser');
+    const btnClear = document.getElementById('clear');
+    const btnSave  = document.getElementById('save');
+
+    sizeInp.addEventListener('input', e => size = +e.target.value);
+    btnBrush.onclick  = () => { erasing=false; };
+    btnEraser.onclick = () => { erasing=true;  };
+    btnClear.onclick  = () => { ctx.clearRect(0,0,w,h); };
+    btnSave.onclick   = () => {
+      const a  = document.createElement('a');
+      const ts = new Date().toISOString().replace(/[:.]/g,'-');
+      a.download = `sketch-${ts}.png`;
+      a.href     = cvs.toDataURL('image/png');
+      a.click();
+    };
+
+    /* Atajos de teclado */
+    window.addEventListener('keydown', (e)=>{
+      if(e.key === 'e' || e.key === 'E') erasing = true;
+      if(e.key === 'b' || e.key === 'B') erasing = false;
+      if(e.key === '+' || e.key === '=') sizeInp.value = size = Math.min(40, size+1);
+      if(e.key === '-' || e.key === '_') sizeInp.value = size = Math.max(1, size-1);
+      if((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); btnSave.click(); }
+      if(e.key === 'Delete') btnClear.click();
+    });
+  })();
+  </script>
+
+  <!-- ────────────────────────────────────────────────────────────────────────
+       LLUVIA DE SÍMBOLOS (estilo Matrix)
+       - Bucle infinito
+       - Reinicio inmediato de cada columna (no desaparece)
+       - Sin halo exagerado (no “pinta” todo de morado)
+       - Config persistente con localStorage (setMatrix / setMatrixChars)
+       ──────────────────────────────────────────────────────────────────────── -->
+  <script>
+  (() => {
+    const c   = document.getElementById('matrix');
+    const ctx = c.getContext('2d');
+    const DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
+    /* Config persistente */
+    const STORE = 'matrix-config';
+    const CHARS_KEY = 'matrix-chars';
+
+    /* Valores por defecto (se pueden sobreescribir con setMatrix) */
+    const DEFAULTS = {
+      fontSize: 18,  // tamaño del símbolo
+      speed: 1.2,    // velocidad de caída
+      trail: 0.12,   // estela (>= borra más rápido)
+      density: 1.0,  // 1.0 = columnas “normales”; 0.8 = más columnas
+      color: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#9b8cff'
+    };
+    const CFG = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(STORE) || '{}'));
+
+    /* Símbolos (puedes cambiar con setMatrixChars('ABC…')) */
+    const DEFAULT_CHARS = '01アイウエオカキクケコナニヌネノABCDEFGHIJKLMNOPQRSTUVWXYZ#$%&+-*/<>{}[]';
+    let CHARS = localStorage.getItem(CHARS_KEY) || DEFAULT_CHARS;
+
+    /* Helpers públicos (conservan en localStorage) */
+    window.setMatrix = (opts={}) => {
+      Object.assign(CFG, opts);
+      localStorage.setItem(STORE, JSON.stringify(CFG));
+    };
+    window.setMatrixChars = (s='') => {
+      CHARS = s.length ? s : DEFAULT_CHARS;
+      localStorage.setItem(CHARS_KEY, CHARS);
+    };
+
+    /* Preparación de columnas/“gotas” */
+    let w=0, h=0, cols=0, drops=[];
+    function resize(){
+      w = window.innerWidth;  h = window.innerHeight;
+      c.width  = Math.floor(w * DPR);
+      c.height = Math.floor(h * DPR);
+      c.style.width  = w + 'px';
+      c.style.height = h + 'px';
+      ctx.setTransform(DPR,0,0,DPR,0,0);
+
+      cols  = Math.max(1, Math.floor(w / (CFG.fontSize * CFG.density)));
+      drops = Array(cols).fill(0).map(()=> Math.random() * (h/CFG.fontSize)); // inicio aleatorio
+    }
+    window.addEventListener('resize', resize, {passive:true});
+    resize();
+
+    /* Bucle de dibujo */
+    function draw(){
+      // Borrado con “desvanecido” para conservar estela
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = `rgba(0,0,0,${CFG.trail})`;
+      ctx.fillRect(0, 0, w, h);
+
+      // Estilo del símbolo (sin sombra potente para no teñir todo)
+      ctx.globalAlpha = 0.95;
+      ctx.fillStyle   = CFG.color;
+      ctx.shadowColor = CFG.color;
+      ctx.shadowBlur  = 0;
+      ctx.font        = `${CFG.fontSize}px ui-monospace, monospace`;
+
+      // Pinta columna por columna
+      for(let i=0;i<drops.length;i++){
+        const ch = CHARS[ Math.floor(Math.random()*CHARS.length) ];
+        const x  = i * CFG.fontSize * CFG.density;
+        const y  = drops[i] * CFG.fontSize;
+
+        ctx.fillText(ch, x, y);
+
+        drops[i] += CFG.speed;
+
+        // Reinicio inmediato (nunca se apaga)
+        if (y > h) drops[i] = 0;
+      }
+
+      requestAnimationFrame(draw);
+    }
+    draw();
+  })();
+  </script>
+
+  <!-- ────────────────────────────────────────────────────────────────────────
+       PERSISTENCIA DEL HUD y LA NOTA (localStorage)
+       ──────────────────────────────────────────────────────────────────────── -->
+  <script>
+  (function(){
+    /* Guarda/recupera el título y subtítulo del HUD */
+    const h  = document.getElementById('headline');
+    const s  = document.getElementById('subline');
+    const KH = 'hud-headline', KS = 'hud-subline';
+
+    h.textContent = localStorage.getItem(KH) || h.textContent;
+    s.textContent = localStorage.getItem(KS) || s.textContent;
+
+    h.addEventListener('input', ()=> localStorage.setItem(KH, h.textContent));
+    s.addEventListener('input', ()=> localStorage.setItem(KS, s.textContent));
+  })();
+
+  (function(){
+    /* Guarda/recupera el contenido del bloc de notas */
+    const note = document.getElementById('note');
+    const KEY  = 'hud-note';
+
+    note.innerHTML = localStorage.getItem(KEY) || '';
+    note.addEventListener('input', () => {
+      localStorage.setItem(KEY, note.innerHTML);
+    });
+  })();
+  </script>
 </body>
 </html>
